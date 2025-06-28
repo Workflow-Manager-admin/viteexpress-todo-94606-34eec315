@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Header from "./components/Header";
 import NewTaskInput from "./components/NewTaskInput";
 import FilterBar from "./components/FilterBar";
@@ -13,24 +13,108 @@ const colors = {
   text: "#213547",
 };
 
-// Example placeholder data
-const placeholderTasks = [
-  { id: 1, text: "Finish React setup", completed: false },
-  { id: 2, text: "Style components", completed: true },
-  { id: 3, text: "Implement backend API", completed: false }
-];
+/**
+ * Get the API endpoint base (from .env or default)
+ */
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
+
+/**
+ * Helper function for standardized API error parsing
+ */
+function parseApiError(error) {
+  if (typeof error === "string") return error;
+  if (error?.message) return error.message;
+  return "Unknown error";
+}
 
 // PUBLIC_INTERFACE
 function App() {
-  /** Main To-Do App component (UI only, no backend calls yet).
-   *  Manages task list & filter state.
+  /** Main To-Do App component (wired to backend API).
+   *  Manages task list, CRUD actions, filters, loading & error states.
    */
-  const [tasks] = useState(placeholderTasks);
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
+
+  // Fetch tasks from backend API
+  const fetchTasks = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/tasks`);
+      if (!res.ok) throw new Error("Failed to fetch tasks");
+      const data = await res.json();
+      setTasks((Array.isArray(data) ? data : (data.tasks ?? [])));
+    } catch (err) {
+      setError(parseApiError(err));
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  // Add a new task to the backend
+  const addTask = async (taskText) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: taskText }),
+      });
+      if (!res.ok) throw new Error("Failed to add task");
+      await fetchTasks();
+    } catch (err) {
+      setError(parseApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Toggle completion status
+  const toggleComplete = async (taskId, completed) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completed: !completed }),
+      });
+      if (!res.ok) throw new Error("Failed to update task");
+      await fetchTasks();
+    } catch (err) {
+      setError(parseApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete a task
+  const deleteTask = async (taskId) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete task");
+      await fetchTasks();
+    } catch (err) {
+      setError(parseApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Compute filtered tasks
   const filteredTasks = tasks.filter((task) => {
-    if (filter === "completed") return task.completed;
+    if (filter === "completed") return !!task.completed;
     if (filter === "pending") return !task.completed;
     return true;
   });
@@ -60,9 +144,42 @@ function App() {
           margin: "2rem 0",
         }}
       >
-        <NewTaskInput colors={colors} />
+        <NewTaskInput
+          colors={colors}
+          onAdd={addTask}
+          disabled={loading}
+        />
         <FilterBar filter={filter} setFilter={setFilter} colors={colors} />
-        <TaskList tasks={filteredTasks} colors={colors} />
+        {error && (
+          <div
+            style={{
+              color: "#d32f2f",
+              background: "#fff3f4",
+              border: "1px solid #ffd1d1",
+              padding: "0.7em",
+              borderRadius: 10,
+              marginBottom: 12,
+              fontSize: "1em",
+              textAlign: "center",
+              fontWeight: 500,
+            }}
+            role="alert"
+          >
+            {error}
+          </div>
+        )}
+        <TaskList
+          tasks={filteredTasks}
+          colors={colors}
+          onToggle={toggleComplete}
+          onDelete={deleteTask}
+          loading={loading}
+        />
+        {loading && (
+          <div style={{ textAlign: "center", margin: "20px 0", color: "#999" }}>
+            Loading...
+          </div>
+        )}
       </div>
     </div>
   );

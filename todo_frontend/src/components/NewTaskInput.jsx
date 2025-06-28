@@ -1,10 +1,21 @@
-import React from "react";
+import React, { useState } from "react";
 
 // PUBLIC_INTERFACE
-function NewTaskInput({ colors }) {
-  /** Input bar for adding new tasks (UI only). */
+function NewTaskInput({ colors, onAdd, disabled }) {
+  /** Input bar for adding new tasks (with backend integration via onAdd prop). */
+  const [input, setInput] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    if (onAdd) {
+      await onAdd(input);
+      setInput("");
+    }
+  };
+
   return (
-    <form style={{ display: "flex", gap: 8, marginBottom: 20 }} onSubmit={(e) => e.preventDefault()}>
+    <form style={{ display: "flex", gap: 8, marginBottom: 20 }} onSubmit={submit} autoComplete="off">
       <input
         type="text"
         placeholder="Add a new task..."
@@ -18,9 +29,10 @@ function NewTaskInput({ colors }) {
           outline: "none",
           background: "#fafbfc",
         }}
-        disabled
-        value=""
-        onChange={() => {}}
+        disabled={disabled}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        maxLength={100}
       />
       <button
         type="submit"
@@ -32,10 +44,11 @@ function NewTaskInput({ colors }) {
           borderRadius: 8,
           padding: "0 1.3em",
           fontSize: "1em",
-          cursor: "not-allowed",
-          opacity: 0.7,
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.7 : 1,
         }}
-        disabled
+        disabled={disabled || !input.trim()}
+        aria-disabled={disabled || !input.trim()}
       >
         Add
       </button>
